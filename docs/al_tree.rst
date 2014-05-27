@@ -2,7 +2,6 @@ Adjacency List trees
 ====================
 
 .. module:: treebeard.al_tree
-.. moduleauthor:: Gustavo Picon <tabo@tabo.pe>
 
 This is a simple implementation of the traditional Adjacency List Model for
 storing trees in relational databases.
@@ -19,16 +18,32 @@ The adjacency list model has the advantage of fast writes at the cost of
 slow reads. If you read more than you write, use
 :class:`~treebeard.mp_tree.MP_Node` instead.
 
+.. warning::
+
+   As with all tree implementations, please be aware of the
+   :doc:`caveats`.
+
+
 .. inheritance-diagram:: AL_Node
 .. autoclass:: AL_Node
    :show-inheritance:
+
+   .. warning::
+
+     If you need to define your own
+     :py:class:`~django.db.models.Manager` class,
+     you'll need to subclass
+     :py:class:`~AL_NodeManager`.
+
 
    .. attribute:: node_order_by
 
       Attribute: a list of model fields that will be used for node
       ordering. When enabled, all tree operations will assume this ordering.
 
-      Example::
+      Example:
+
+      .. code-block:: python
 
          node_order_by = ['field1', 'field2', 'field3']
 
@@ -36,7 +51,9 @@ slow reads. If you read more than you write, use
 
       ``ForeignKey`` to itself. This attribute **MUST** be defined in the
       subclass (sadly, this isn't inherited correctly from the ABC in
-      `Django 1.0`). Just copy&paste these lines to your model::
+      `Django 1.0`). Just copy&paste these lines to your model:
+
+      .. code-block:: python
 
                parent = models.ForeignKey('self',
                                           related_name='children_set',
@@ -48,11 +65,15 @@ slow reads. If you read more than you write, use
       ``PositiveIntegerField`` used to store the relative position of a node
       between it's siblings. This attribute is mandatory *ONLY* if you don't
       set a :attr:`node_order_by` field. You can define it copy&pasting this
-      line in your model::
+      line in your model:
+
+      .. code-block:: python
 
               sib_order = models.PositiveIntegerField()
 
-   Examples::
+   Examples:
+
+   .. code-block:: python
 
            class AL_TestNode(AL_Node):
                parent = models.ForeignKey('self',
@@ -81,3 +102,5 @@ slow reads. If you read more than you write, use
 
         See: :meth:`treebeard.Node.get_depth`
 
+.. autoclass:: AL_NodeManager
+  :show-inheritance:

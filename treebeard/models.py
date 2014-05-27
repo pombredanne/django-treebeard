@@ -1,16 +1,21 @@
-"Models and base API"
+"""Models and base API"""
 
+import sys
 import operator
 
+if sys.version_info >= (3, 0):
+    from functools import reduce
+
 from django.db.models import Q
-from django.db import models, transaction
-from django.conf import settings
+from django.db import models, transaction, router, connections
 
 from treebeard.exceptions import InvalidPosition, MissingNodeOrderBy
 
 
 class Node(models.Model):
-    "Node class"
+    """Node class"""
+
+    _db_connection = None
 
     @classmethod
     def add_root(cls, **kwargs):  # pragma: no cover
@@ -22,10 +27,41 @@ class Node(models.Model):
 
         :param \*\*kwargs: object creation data that will be passed to the
             inherited Node model
+        :param instance: Instead of passing object creation data, you can
+            pass an already-constructed (but not yet saved) model instance to
+            be inserted into the tree.
 
         :returns: the created node object. It will be save()d by this method.
+
+        :raise NodeAlreadySaved: when the passed ``instance`` already exists
+            in the database
         """
         raise NotImplementedError
+
+    @classmethod
+    def get_foreign_keys(cls):
+        """Get foreign keys and models they refer to, so we can pre-process
+        the data for load_bulk
+        """
+        foreign_keys = {}
+        for field in cls._meta.fields:
+            if (
+                field.get_internal_type() == 'ForeignKey' and
+                field.name != 'parent'
+            ):
+                foreign_keys[field.name] = field.rel.to
+        return foreign_keys
+
+    @classmethod
+    def _process_foreign_keys(cls, foreign_keys, node_data):
+        """For each foreign key try to load the actual object so load_bulk
+        doesn't fail trying to load an int where django expects a
+        model instance
+        """
+        for key in foreign_keys.keys():
+            if key in node_data:
+                node_data[key] = foreign_keys[key].objects.get(
+                    pk=node_data[key])
 
     @classmethod
     def load_bulk(cls, bulk_data, parent=None, keep_ids=False):
@@ -54,7 +90,7 @@ class Node(models.Model):
 
         :param keep_ids:
 
-            If enabled, lads the nodes with the same id that are given in the
+            If enabled, loads the nodes with the same id that are given in the
             structure. Will error if there are nodes without id info or if the
             ids are already used.
 
@@ -66,10 +102,13 @@ class Node(models.Model):
         added = []
         # stack of nodes to analize
         stack = [(parent, node) for node in bulk_data[::-1]]
+        foreign_keys = cls.get_foreign_keys()
+
         while stack:
             parent, node_struct = stack.pop()
             # shallow copy of the data strucure so it doesn't persist...
             node_data = node_struct['data'].copy()
+            cls._process_foreign_keys(foreign_keys, node_data)
             if keep_ids:
                 node_data['id'] = node_struct['id']
             if parent:
@@ -80,8 +119,10 @@ class Node(models.Model):
             if 'children' in node_struct:
                 # extending the stack with the current node as the parent of
                 # the new nodes
-                stack.extend([(node_obj, node) \
-                    for node in node_struct['children'][::-1]])
+                stack.extend([
+                    (node_obj, node)
+                    for node in node_struct['children'][::-1]
+                ])
         transaction.commit_unless_managed()
         return added
 
@@ -100,19 +141,23 @@ class Node(models.Model):
             Stores the id value (primary key) of every node. Enabled by
             default.
 
-        :returns: A python data structure, describen with detail in
+        :returns: A python data structure, described with detail in
                   :meth:`load_bulk`
         """
         raise NotImplementedError
 
     @classmethod
     def get_root_nodes(cls):  # pragma: no cover
-        ":returns: A queryset containing the root nodes in the tree."
+        """:returns: A queryset containing the root nodes in the tree."""
         raise NotImplementedError
 
     @classmethod
     def get_first_root_node(cls):
-        ":returns: The first root node in the tree or ``None`` if it is empty"
+        """
+        :returns:
+
+            The first root node in the tree or ``None`` if it is empty.
+        """
         try:
             return cls.get_root_nodes()[0]
         except IndexError:
@@ -120,7 +165,11 @@ class Node(models.Model):
 
     @classmethod
     def get_last_root_node(cls):
-        ":returns: The last root node in the tree or ``None`` if it is empty"
+        """
+        :returns:
+
+            The last root node in the tree or ``None`` if it is empty.
+        """
         try:
             return cls.get_root_nodes().reverse()[0]
         except IndexError:
@@ -128,7 +177,7 @@ class Node(models.Model):
 
     @classmethod
     def find_problems(cls):  # pragma: no cover
-        "Checks for problems in the tree structure."
+        """Checks for problems in the tree structure."""
         raise NotImplementedError
 
     @classmethod
@@ -165,9 +214,6 @@ class Node(models.Model):
             A `list` (**NOT** a Queryset) of node objects with an extra
             attribute: `descendants_count`.
         """
-
-        # this is the slowest possible implementation, subclasses should do
-        # better
         if parent is None:
             qset = cls.get_root_nodes()
         else:
@@ -178,7 +224,7 @@ class Node(models.Model):
         return nodes
 
     def get_depth(self):  # pragma: no cover
-        ":returns: the depth (level) of the node"
+        """:returns: the depth (level) of the node"""
         raise NotImplementedError
 
     def get_siblings(self):  # pragma: no cover
@@ -191,14 +237,11 @@ class Node(models.Model):
         raise NotImplementedError
 
     def get_children(self):  # pragma: no cover
-        ":returns: A queryset of all the node's children"
+        """:returns: A queryset of all the node's children"""
         raise NotImplementedError
 
     def get_children_count(self):
-        ":returns: The number of the node's children"
-
-        # this is the last resort, subclasses of Node should implement this in
-        # a efficient way.
+        """:returns: The number of the node's children"""
         return self.get_children().count()
 
     def get_descendants(self):
@@ -211,18 +254,26 @@ class Node(models.Model):
         raise NotImplementedError
 
     def get_descendant_count(self):
-        ":returns: the number of descendants of a node."
+        """:returns: the number of descendants of a node."""
         return self.get_descendants().count()
 
     def get_first_child(self):
-        ":returns: The leftmost node's child, or None if it has no children."
+        """
+        :returns:
+
+            The leftmost node's child, or None if it has no children.
+        """
         try:
             return self.get_children()[0]
         except IndexError:
             return None
 
     def get_last_child(self):
-        ":returns: The rightmost node's child, or None if it has no children."
+        """
+        :returns:
+
+            The rightmost node's child, or None if it has no children.
+        """
         try:
             return self.get_children().reverse()[0]
         except IndexError:
@@ -253,7 +304,6 @@ class Node(models.Model):
             The previous node's sibling, or None if it was the leftmost
             sibling.
         """
-
         siblings = self.get_siblings()
         ids = [obj.pk for obj in siblings]
         if self.pk in ids:
@@ -277,14 +327,14 @@ class Node(models.Model):
 
     def is_sibling_of(self, node):
         """
-        :returns: ``True`` if the node if a sibling of another node given as an
+        :returns: ``True`` if the node is a sibling of another node given as an
             argument, else, returns ``False``
 
         :param node:
 
             The node that will be checked as a sibling
         """
-        return len(self.get_siblings().filter(pk__in=[node.pk])) > 0
+        return self.get_siblings().filter(pk=node.pk).exists()
 
     def is_child_of(self, node):
         """
@@ -295,11 +345,11 @@ class Node(models.Model):
 
             The node that will be checked as a parent
         """
-        return len(node.get_children().filter(pk__in=[self.pk])) > 0
+        return node.get_children().filter(pk=self.pk).exists()
 
     def is_descendant_of(self, node):  # pragma: no cover
         """
-        :returns: ``True`` if the node if a descendant of another node given
+        :returns: ``True`` if the node is a descendant of another node given
             as an argument, else, returns ``False``
 
         :param node:
@@ -319,8 +369,14 @@ class Node(models.Model):
 
             Object creation data that will be passed to the inherited Node
             model
+        :param instance: Instead of passing object creation data, you can
+            pass an already-constructed (but not yet saved) model instance to
+            be inserted into the tree.
 
         :returns: The created node object. It will be save()d by this method.
+
+        :raise NodeAlreadySaved: when the passed ``instance`` already exists
+            in the database
         """
         raise NotImplementedError
 
@@ -345,6 +401,9 @@ class Node(models.Model):
 
             Object creation data that will be passed to the inherited
             Node model
+        :param instance: Instead of passing object creation data, you can
+            pass an already-constructed (but not yet saved) model instance to
+            be inserted into the tree.
 
         :returns:
 
@@ -355,20 +414,22 @@ class Node(models.Model):
            ``pos`` parm wasn't ``sorted-sibling``
         :raise MissingNodeOrderBy: when passing ``sorted-sibling`` as ``pos``
            and the :attr:`node_order_by` attribute is missing
+        :raise NodeAlreadySaved: when the passed ``instance`` already exists
+            in the database
         """
         raise NotImplementedError
 
     def get_root(self):  # pragma: no cover
-        ":returns: the root node for the current node object."
+        """:returns: the root node for the current node object."""
         raise NotImplementedError
 
     def is_root(self):
-        ":returns: True if the node is a root node (else, returns False)"
-        return self.get_root() == self
+        """:returns: True if the node is a root node (else, returns False)"""
+        return self.get_root().pk == self.pk
 
     def is_leaf(self):
-        ":returns: True if the node is a leaf node (else, returns False)"
-        return self.get_children_count() == 0
+        """:returns: True if the node is a leaf node (else, returns False)"""
+        return not self.get_children().exists()
 
     def get_ancestors(self):  # pragma: no cover
         """
@@ -442,47 +503,47 @@ class Node(models.Model):
         raise NotImplementedError
 
     def delete(self):
-        "Removes a node and all it's descendants."
+        """Removes a node and all it's descendants."""
         self.__class__.objects.filter(id=self.pk).delete()
 
-    def _fix_add_sibling_opts(self, pos):
-        "prepare the pos variable for the add_sibling method"
+    def _prepare_pos_var(self, pos, method_name, valid_pos, valid_sorted_pos):
         if pos is None:
             if self.node_order_by:
                 pos = 'sorted-sibling'
             else:
                 pos = 'last-sibling'
-        if pos not in ('first-sibling', 'left', 'right', 'last-sibling',
-                       'sorted-sibling'):
+        if pos not in valid_pos:
             raise InvalidPosition('Invalid relative position: %s' % (pos, ))
-        if self.node_order_by and pos != 'sorted-sibling':
-            raise InvalidPosition('Must use %s in add_sibling when'
-                                  ' node_order_by is enabled' % (
-                                  'sorted-sibling', ))
-        if pos == 'sorted-sibling' and not self.node_order_by:
+        if self.node_order_by and pos not in valid_sorted_pos:
+            raise InvalidPosition(
+                'Must use %s in %s when node_order_by is enabled' % (
+                    ' or '.join(valid_sorted_pos), method_name))
+        if pos in valid_sorted_pos and not self.node_order_by:
             raise MissingNodeOrderBy('Missing node_order_by attribute.')
         return pos
 
-    def _fix_move_opts(self, pos):
-        "prepare the pos var for the move method"
-        if pos is None:
-            if self.node_order_by:
-                pos = 'sorted-sibling'
-            else:
-                pos = 'last-sibling'
-        if pos not in ('first-sibling', 'left', 'right', 'last-sibling',
-                       'sorted-sibling', 'first-child', 'last-child',
-                       'sorted-child'):
-            raise InvalidPosition('Invalid relative position: %s' % (pos, ))
-        if self.node_order_by and pos not in ('sorted-child',
-                                              'sorted-sibling'):
-            raise InvalidPosition('Must use %s or %s in add_sibling when'
-                                  ' node_order_by is enabled' % (
-                                  'sorted-sibling', 'sorted-child'))
-        if pos in ('sorted-child', 'sorted-sibling') and \
-                not self.node_order_by:
-            raise MissingNodeOrderBy('Missing node_order_by attribute.')
-        return pos
+    _valid_pos_for_add_sibling = ('first-sibling', 'left', 'right',
+                                  'last-sibling', 'sorted-sibling')
+    _valid_pos_for_sorted_add_sibling = ('sorted-sibling',)
+
+    def _prepare_pos_var_for_add_sibling(self, pos):
+        return self._prepare_pos_var(
+            pos,
+            'add_sibling',
+            self._valid_pos_for_add_sibling,
+            self._valid_pos_for_sorted_add_sibling)
+
+    _valid_pos_for_move = _valid_pos_for_add_sibling + (
+        'first-child', 'last-child', 'sorted-child')
+    _valid_pos_for_sorted_move = _valid_pos_for_sorted_add_sibling + (
+        'sorted-child',)
+
+    def _prepare_pos_var_for_move(self, pos):
+        return self._prepare_pos_var(
+            pos,
+            'move',
+            self._valid_pos_for_move,
+            self._valid_pos_for_sorted_move)
 
     def get_sorted_pos_queryset(self, siblings, newobj):
         """
@@ -497,9 +558,12 @@ class Node(models.Model):
         fields, filters = [], []
         for field in self.node_order_by:
             value = getattr(newobj, field)
-            filters.append(Q(*
-                [Q(**{f: v}) for f, v in fields] +
-                [Q(**{'%s__gt' % field: value})]))
+            filters.append(
+                Q(
+                    *[Q(**{f: v}) for f, v in fields] +
+                     [Q(**{'%s__gt' % field: value})]
+                )
+            )
             fields.append((field, value))
         return siblings.filter(reduce(operator.or_, filters))
 
@@ -517,28 +581,18 @@ class Node(models.Model):
 
         result, info = [], {}
         start_depth, prev_depth = (None, None)
-
         for node in cls.get_tree(parent):
-
             depth = node.get_depth()
-
             if start_depth is None:
                 start_depth = depth
-
-            open = (depth > prev_depth)
-
-            if depth < prev_depth:
-                info['close'] = range(0, prev_depth - depth)
-
+            open = (depth and (prev_depth is None or depth > prev_depth))
+            if prev_depth is not None and depth < prev_depth:
+                info['close'] = list(range(0, prev_depth - depth))
             info = {'open': open, 'close': [], 'level': depth - start_depth}
-
             result.append((node, info,))
-
             prev_depth = depth
-
-        if start_depth > 0:
-            info['close'] = range(0, prev_depth - start_depth + 1)
-
+        if start_depth and start_depth > 0:
+            info['close'] = list(range(0, prev_depth - start_depth + 1))
         return result
 
     @classmethod
@@ -550,32 +604,36 @@ class Node(models.Model):
 
         (this is a workaround for a bug in django)
         """
-        while cls._meta.proxy:
-            cls = cls._meta.proxy_for_model
-        return cls
+        current_class = cls
+        while current_class._meta.proxy:
+            current_class = current_class._meta.proxy_for_model
+        return current_class
 
     @classmethod
-    def get_database_engine(cls):
-        """
-        Returns the supported database engine used by a treebeard model.
+    def _get_database_connection(cls, action):
+        return {
+            'read': connections[router.db_for_read(cls)],
+            'write': connections[router.db_for_write(cls)]
+        }[action]
 
-        This will return the default database engine depending on the version
-        of Django. If you use something different, like a non-default database,
-        you need to override this method and return the correct engine.
-
-        :returns: postgresql, postgresql_psycopg2, mysql or sqlite3
+    @classmethod
+    def get_database_vendor(cls, action):
         """
-        engine = None
-        try:
-            engine = settings.DATABASES['default']['ENGINE']
-        except (AttributeError, KeyError):
-            engine = None
-        # the old style settings still work in Django 1.2+ if there is no
-        # DATABASES setting
-        if engine is None:
-            engine = settings.DATABASE_ENGINE
-        return engine.split('.')[-1]
+        returns the supported database vendor used by a treebeard model when
+        performing read (select) or write (update, insert, delete) operations.
+
+        :param action:
+
+            `read` or `write`
+
+        :returns: postgresql, mysql or sqlite
+        """
+        return cls._get_database_connection(action).vendor
+
+    @classmethod
+    def _get_database_cursor(cls, action):
+        return cls._get_database_connection(action).cursor()
 
     class Meta:
-        "Abstract model."
+        """Abstract model."""
         abstract = True

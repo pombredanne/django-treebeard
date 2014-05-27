@@ -25,19 +25,19 @@ class pytest_test(test):
 
 setup_args = dict(
     name='django-treebeard',
-    version='2.0a1',
+    version='2.0',
     url='https://tabo.pe/projects/django-treebeard/',
     author='Gustavo Picon',
     author_email='tabo@tabo.pe',
     license='Apache License 2.0',
-    packages=['treebeard', 'treebeard.templatetags'],
+    packages=['treebeard', 'treebeard.templatetags', 'treebeard.tests'],
     package_dir={'treebeard': 'treebeard'},
     package_data={
         'treebeard': ['templates/admin/*.html', 'static/treebeard/*']},
-    description='Efficient tree implementations for Django 1.3+',
-    long_description=open(root_dir() + '/README').read(),
+    description='Efficient tree implementations for Django 1.4+',
+    long_description=open(root_dir() + '/README.rst').read(),
     cmdclass={'test': pytest_test},
-    install_requires=['Django>=1.3'],
+    install_requires=['Django>=1.4'],
     tests_require=['pytest'],
     classifiers=[
         'Development Status :: 5 - Production/Stable',
@@ -46,10 +46,10 @@ setup_args = dict(
         'Environment :: Web Environment',
         'Framework :: Django',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 2.4',
-        'Programming Language :: Python :: 2.5',
         'Programming Language :: Python :: 2.6',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.2',
+        'Programming Language :: Python :: 3.3',
         'Operating System :: OS Independent',
         'Topic :: Software Development :: Libraries',
         'Topic :: Utilities'])

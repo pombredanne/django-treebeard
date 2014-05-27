@@ -2,15 +2,28 @@ Forms
 =====
 
 .. module:: treebeard.forms
-.. moduleauthor:: aleh.fl
-.. moduleauthor:: Gustavo Picon <tabo@tabo.pe>
 
 .. autoclass:: MoveNodeForm
    :show-inheritance:
 
-    Read the `Django Form objects documentation`_ for reference.
+.. autofunction:: movenodeform_factory
+
+    For a full reference of this function, please read
+    :py:func:`~django.forms.models.modelform_factory`
 
 
-    .. _`Django Form objects documentation`:
-       http://docs.djangoproject.com/en/dev/topics/forms/#form-objects
+    Example, ``MyNode`` is a subclass of :py:class:`treebeard.al_tree.AL_Node`:
+
+    .. code-block:: python
+
+        MyNodeForm = movenodeform_factory(MyNode)
+
+    is equivalent to:
+
+    .. code-block:: python
+
+        class MyNodeForm(MoveNodeForm):
+            class Meta:
+                model = models.MyNode
+                exclude = ('sib_order', 'parent')
 

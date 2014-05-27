@@ -1,12 +1,19 @@
-"Treebeard exceptions"
+"""Treebeard exceptions"""
 
 
 class InvalidPosition(Exception):
-    "Raised when passing an invalid pos value"
+    """Raised when passing an invalid pos value"""
 
 
 class InvalidMoveToDescendant(Exception):
-    "Raised when attemping to move a node to one of it's descendants."
+    """Raised when attemping to move a node to one of it's descendants."""
+
+
+class NodeAlreadySaved(Exception):
+    """
+    Raised when attempting to add a node which is already saved to the
+    database.
+    """
 
 
 class MissingNodeOrderBy(Exception):

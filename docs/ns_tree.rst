@@ -2,22 +2,33 @@ Nested Sets trees
 =================
 
 .. module:: treebeard.ns_tree
-.. moduleauthor:: Gustavo Picon <tabo@tabo.pe>
 
-An implementation of Nested Sets trees for Django 1.3+, as described by
+An implementation of Nested Sets trees for Django 1.4+, as described by
 `Joe Celko`_ in `Trees and Hierarchies in SQL for Smarties`_.
 
 Nested sets have very efficient reads at the cost of high maintenance on
 write/delete operations.
 
+.. warning::
 
-.. _`Joe Celko`: http://en.wikipedia.org/wiki/Joe_Celko
-.. _`Trees and Hierarchies in SQL for Smarties`:
-  http://www.elsevier.com/wps/product/cws_home/702605
+   As with all tree implementations, please be aware of the
+   :doc:`caveats`.
+
 
 .. inheritance-diagram:: NS_Node
 .. autoclass:: NS_Node
   :show-inheritance:
+
+  .. warning::
+
+     If you need to define your own
+     :py:class:`~django.db.models.Manager` class,
+     you'll need to subclass
+     :py:class:`~NS_NodeManager`.
+
+     Also, if in your manager you need to change the default
+     queryset handler, you'll need to subclass
+     :py:class:`~NS_NodeQuerySet`.
 
 
   .. attribute:: node_order_by
@@ -25,7 +36,9 @@ write/delete operations.
      Attribute: a list of model fields that will be used for node
      ordering. When enabled, all tree operations will assume this ordering.
 
-     Example::
+     Example:
+
+     .. code-block:: python
 
         node_order_by = ['field1', 'field2', 'field3']
 
@@ -53,3 +66,16 @@ write/delete operations.
         .. note::
 
             This metod returns a queryset.
+
+
+.. autoclass:: NS_NodeManager
+  :show-inheritance:
+
+.. autoclass:: NS_NodeQuerySet
+  :show-inheritance:
+
+
+
+.. _`Joe Celko`: http://en.wikipedia.org/wiki/Joe_Celko
+.. _`Trees and Hierarchies in SQL for Smarties`:
+  http://www.elsevier.com/wps/product/cws_home/702605

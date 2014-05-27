@@ -2,10 +2,9 @@ Materialized Path trees
 =======================
 
 .. module:: treebeard.mp_tree
-.. moduleauthor:: Gustavo Picon <tabo@tabo.pe>
 
 This is an efficient implementation of Materialized Path
-trees for Django 1.3+, as described by `Vadim Tropashko`_ in `SQL Design
+trees for Django 1.4+, as described by `Vadim Tropashko`_ in `SQL Design
 Patterns`_. Materialized Path is probably the fastest way of working with
 trees in SQL without the need of extra work in the database, like Oracle's
 ``CONNECT BY`` or sprocs and triggers for nested intervals.
@@ -28,6 +27,11 @@ This makes the read operations faster, at the cost of a little more
 maintenance on tree updates/inserts/deletes. Don't worry, even with these
 extra steps, materialized path is more efficient than other approaches.
 
+.. warning::
+
+   As with all tree implementations, please be aware of the
+   :doc:`caveats`.
+
 .. note::
 
    The materialized path approach makes heavy use of ``LIKE`` in your
@@ -36,27 +40,6 @@ extra steps, materialized path is more efficient than other approaches.
    :attr:`~MP_Node.path` field is indexed in the database, and all
    ``LIKE`` clauses that don't **start** with a ``%`` character will use
    the index. This is what makes the materialized path approach so fast.
-
-.. warning::
-
-   Due to a `bug in Django 1.3`_, Materialized Path could be problematic
-   **ONLY** under the following conditions:
-
-       * Proxy models are used. Most users don't use this. If you are not
-         sure that you are using proxy models, then you are not, and
-         shouldn't worry about this.
-       * Django 1.3.X is used
-       * MySQL is being used.
-
-   Solutions to this problem:
-
-       * Use PostgreSQL
-       * Use Django 1.4
-
-.. _`Vadim Tropashko`: http://vadimtropashko.wordpress.com/
-.. _`Sql Design Patterns`:
-   http://www.rampant-books.com/book_2006_1_sql_coding_styles.htm
-.. _`bug in Django 1.3`: https://code.djangoproject.com/ticket/17918
 
 .. inheritance-diagram:: MP_Node
 .. autoclass:: MP_Node
@@ -71,17 +54,24 @@ extra steps, materialized path is more efficient than other approaches.
   .. warning::
 
      Do not change the values of the :attr:`steplen`, :attr:`alphabet` or
-     :attr:`node_order_by` after saving your first model. Doing so will
-     corrupt the tree. If you *must* do it:
+     :attr:`node_order_by` after saving your first object. Doing so will
+     corrupt the tree.
 
-       1. Backup the tree with :meth:`dump_bulk`
-       2. Empty your model's table
-       3. Change :attr:`depth`, :attr:`alphabet` and/or
-          :attr:`node_order_by` in your model
-       4. Restore your backup using :meth:`load_bulk` with
-          ``keep_ids=True`` to keep the same primary keys you had.
+  .. warning::
 
-  Example::
+     If you need to define your own
+     :py:class:`~django.db.models.Manager` class,
+     you'll need to subclass
+     :py:class:`~MP_NodeManager`.
+
+     Also, if in your manager you need to change the default
+     queryset handler, you'll need to subclass
+     :py:class:`~MP_NodeQuerySet`.
+
+
+  Example:
+
+  .. code-block:: python
 
      class SortedNode(MP_Node):
         node_order_by = ['numval', 'strval']
@@ -117,27 +107,42 @@ extra steps, materialized path is more efficient than other approaches.
         In case you know what you are doing, there is a test that is
         disabled by default that can tell you the optimal default alphabet
         in your enviroment. To run the test you must enable the
-        :envvar:`TREEBEARD_TEST_ALPHABET` enviroment variable::
+        :envvar:`TREEBEARD_TEST_ALPHABET` enviroment variable:
 
-          $ TREEBEARD_TEST_ALPHABET=1 python manage.py test treebeard.TestTreeAlphabet
+        .. code-block:: console
 
-        On my Ubuntu 8.04.1 system, these are the optimal values for the
-        three supported databases in their *default* configuration:
+          $ TREEBEARD_TEST_ALPHABET=1 py.test -k test_alphabet
 
-         ================ ================
-         Database         Optimal Alphabet
-         ================ ================
-         MySQL 5.0.51     0-9A-Z
-         PostgreSQL 8.2.7 0-9A-Z
-         Sqlite3          0-9A-Za-z
-         ================ ================
+        In OS X Mavericks, good readable values for the three supported
+        databases in their *default* configuration:
+
+         ================ ================ ====
+         Database         Optimal Alphabet Base
+         ================ ================ ====
+         MySQL 5.6.17     0-9A-Z           36
+         PostgreSQL 9.3.4 0-9A-Za-z        62
+         Sqlite3          0-9A-Za-z        62
+         ================ ================ ====
+
+        The default value is MySQL's since it will work in all DBs,
+        but when working with a better databse, changing the
+        :attr:`alphabet` value is recommended in order to increase the
+        density of the paths.
+
+        For an even better approach, change the collation of the
+        :attr:`path` column in the database to handle raw ASCII, and
+        use the printable ASCII characters (0x20 to 0x7E) as the
+        :attr:`alphabet`.
+
 
   .. attribute:: node_order_by
 
      Attribute: a list of model fields that will be used for node
      ordering. When enabled, all tree operations will assume this ordering.
 
-     Example::
+     Example:
+
+     .. code-block:: python
 
        node_order_by = ['field1', 'field2', 'field3']
 
@@ -154,7 +159,9 @@ extra steps, materialized path is more efficient than other approaches.
 
        1. To change the max_length value of the path in your model, you
           can't just define it since you'd get a django exception, you have
-          to modify the already defined attribute::
+          to modify the already defined attribute:
+
+          .. code-block:: python
 
             class MyNodeModel(MP_Node):
                 pass
@@ -163,7 +170,9 @@ extra steps, materialized path is more efficient than other approaches.
 
        2. You can't rely on Django's `auto_now` properties in date fields
           for sorting, you'll have to manually set the value before creating
-          a node::
+          a node:
+
+          .. code-block:: python
 
             class TestNodeSortedAutoNow(MP_Node):
                 desc = models.CharField(max_length=255)
@@ -182,12 +191,12 @@ extra steps, materialized path is more efficient than other approaches.
        limit of 765 bytes per index, so that would be the limit if your path
        is ASCII encoded. If your path column in InnoDB is using unicode,
        the index limit will be 255 characters since in MySQL's indexes,
-       unicode means 3 bytes.
+       unicode means 3 bytes per character.
 
      .. note::
 
-        treebeard uses **numconv** for path encoding:
-        https://tabo.pe/projects/numconv/
+        ``django-treebeard`` uses `numconv`_ for path encoding.
+
 
   .. attribute:: depth
 
@@ -234,12 +243,31 @@ extra steps, materialized path is more efficient than other approaches.
 
         Problems 1, 2 and 3 can't be solved automatically.
 
-     Example::
+     Example:
+
+     .. code-block:: python
 
         MyNodeModel.find_problems()
 
   .. automethod:: fix_tree
 
-     Example::
+     Example:
+
+     .. code-block:: python
 
         MyNodeModel.fix_tree()
+
+
+
+.. autoclass:: MP_NodeManager
+  :show-inheritance:
+
+.. autoclass:: MP_NodeQuerySet
+  :show-inheritance:
+
+
+
+.. _`Vadim Tropashko`: http://vadimtropashko.wordpress.com/
+.. _`Sql Design Patterns`:
+   http://www.rampant-books.com/book_2006_1_sql_coding_styles.htm
+.. _numconv: https://tabo.pe/projects/numconv/

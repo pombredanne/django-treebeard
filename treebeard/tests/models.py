@@ -1,10 +1,16 @@
 from django.db import models
 from django.contrib.auth.models import User
-from django.conf import settings
 
 from treebeard.mp_tree import MP_Node
 from treebeard.al_tree import AL_Node
 from treebeard.ns_tree import NS_Node
+
+
+class RelatedModel(models.Model):
+    desc = models.CharField(max_length=255)
+
+    def __str__(self):
+        return self.desc
 
 
 class MP_TestNode(MP_Node):
@@ -12,29 +18,71 @@ class MP_TestNode(MP_Node):
 
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class MP_UnicodeNode(MP_Node):
+    steplen = 3
+
+    desc = models.CharField(max_length=255)
+
+    def __str__(self):  # pragma: no cover
+        return self.desc
 
 
 class MP_TestNodeSomeDep(models.Model):
     node = models.ForeignKey(MP_TestNode)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class MP_TestNodeRelated(MP_Node):
+    steplen = 3
+
+    desc = models.CharField(max_length=255)
+    related = models.ForeignKey(RelatedModel)
+
+    def __str__(self):  # pragma: no cover
+        return 'Node %d' % self.pk
+
+
+class MP_TestNodeInherited(MP_TestNode):
+    extra_desc = models.CharField(max_length=255)
 
 
 class NS_TestNode(NS_Node):
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class NS_UnicodetNode(NS_Node):
+    desc = models.CharField(max_length=255)
+
+    def __str__(self):  # pragma: no cover
+        return self.desc
 
 
 class NS_TestNodeSomeDep(models.Model):
     node = models.ForeignKey(NS_TestNode)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class NS_TestNodeRelated(NS_Node):
+    desc = models.CharField(max_length=255)
+    related = models.ForeignKey(RelatedModel)
+
+    def __str__(self):  # pragma: no cover
+        return 'Node %d' % self.pk
+
+
+class NS_TestNodeInherited(NS_TestNode):
+    extra_desc = models.CharField(max_length=255)
 
 
 class AL_TestNode(AL_Node):
@@ -45,15 +93,44 @@ class AL_TestNode(AL_Node):
     sib_order = models.PositiveIntegerField()
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class AL_UnicodeNode(AL_Node):
+    parent = models.ForeignKey('self',
+                               related_name='children_set',
+                               null=True,
+                               db_index=True)
+    sib_order = models.PositiveIntegerField()
+    desc = models.CharField(max_length=255)
+
+    def __str__(self):  # pragma: no cover
+        return self.desc
 
 
 class AL_TestNodeSomeDep(models.Model):
     node = models.ForeignKey(AL_TestNode)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
+
+class AL_TestNodeRelated(AL_Node):
+    parent = models.ForeignKey('self',
+                               related_name='children_set',
+                               null=True,
+                               db_index=True)
+    sib_order = models.PositiveIntegerField()
+    desc = models.CharField(max_length=255)
+    related = models.ForeignKey(RelatedModel)
+
+    def __str__(self):  # pragma: no cover
+        return 'Node %d' % self.pk
+
+
+class AL_TestNodeInherited(AL_TestNode):
+    extra_desc = models.CharField(max_length=255)
 
 
 class MP_TestNodeSorted(MP_Node):
@@ -63,7 +140,7 @@ class MP_TestNodeSorted(MP_Node):
     val2 = models.IntegerField()
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -73,7 +150,7 @@ class NS_TestNodeSorted(NS_Node):
     val2 = models.IntegerField()
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -87,7 +164,7 @@ class AL_TestNodeSorted(AL_Node):
     val2 = models.IntegerField()
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -96,7 +173,7 @@ class MP_TestNodeAlphabet(MP_Node):
 
     numval = models.IntegerField()
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -104,7 +181,7 @@ class MP_TestNodeSmallStep(MP_Node):
     steplen = 1
     alphabet = '0123456789'
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -114,7 +191,7 @@ class MP_TestNodeSortedAutoNow(MP_Node):
 
     node_order_by = ['created']
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
 
 
@@ -123,8 +200,9 @@ class MP_TestNodeShortPath(MP_Node):
     alphabet = '01234'
     desc = models.CharField(max_length=255)
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
 
 # This is how you change the default fields defined in a Django abstract class
 # (in this case, MP_Node), since Django doesn't allow overriding fields, only
@@ -154,14 +232,30 @@ class MP_TestSortedNodeShortPath(MP_Node):
 
     node_order_by = ['desc']
 
-    def __unicode__(self):  # pragma: no cover
+    def __str__(self):  # pragma: no cover
         return 'Node %d' % self.pk
+
 
 MP_TestSortedNodeShortPath._meta.get_field('path').max_length = 4
 
 
-if 'django.contrib.auth' in settings.INSTALLED_APPS:
+class MP_TestManyToManyWithUser(MP_Node):
+    name = models.CharField(max_length=255)
+    users = models.ManyToManyField(User)
 
-    class MP_TestIssue14(MP_Node):
-        name = models.CharField(max_length=255)
-        users = models.ManyToManyField(User)
+
+BASE_MODELS = AL_TestNode, MP_TestNode, NS_TestNode
+PROXY_MODELS = AL_TestNode_Proxy, MP_TestNode_Proxy, NS_TestNode_Proxy
+SORTED_MODELS = AL_TestNodeSorted, MP_TestNodeSorted, NS_TestNodeSorted
+DEP_MODELS = AL_TestNodeSomeDep, MP_TestNodeSomeDep, NS_TestNodeSomeDep
+MP_SHORTPATH_MODELS = MP_TestNodeShortPath, MP_TestSortedNodeShortPath
+RELATED_MODELS = AL_TestNodeRelated, MP_TestNodeRelated, NS_TestNodeRelated
+UNICODE_MODELS = AL_UnicodeNode, MP_UnicodeNode, NS_UnicodetNode
+INHERITED_MODELS = (
+    AL_TestNodeInherited, MP_TestNodeInherited, NS_TestNodeInherited
+)
+
+
+def empty_models_tables(models):
+    for model in models:
+        model.objects.all().delete()
